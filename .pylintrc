@@ -1,0 +1,2 @@
+[TYPECHECK]
+ignored-modules=psycopg,alembic.context,alembic.op
