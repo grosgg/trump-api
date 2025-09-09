@@ -1,10 +1,11 @@
 """Database models"""
 import uuid
 from datetime import datetime, timezone
+from typing import List
 
 from fastapi_users.db import SQLAlchemyBaseUserTableUUID
 from sqlalchemy import Column, ForeignKey, UniqueConstraint, Uuid, DateTime, Integer, String, Enum
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.enums import GameStatus, GameVariant, ParticipationStatus, CardSuit, CardRank, CardLocation
 
@@ -21,13 +22,16 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     created_at = Column(DateTime(timezone=True), nullable=False,
                         default=lambda: datetime.now(timezone.utc))
     cash = Column(Integer, nullable=False, default=0)
+    participations: Mapped[List["Participation"]
+                           ] = relationship(back_populates="user")
 
 
 class Game(Base):
     """Game table"""
     __tablename__ = "games"
 
-    id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, index=True, default=uuid.uuid4)
     variant = Column(Enum(GameVariant), nullable=False,
                      default=GameVariant.ONE_DECK)
     status = Column(Enum(GameStatus), nullable=False,
@@ -36,13 +40,18 @@ class Game(Base):
     bank = Column(Integer, nullable=False, default=1000)
     created_at = Column(DateTime(timezone=True), nullable=False,
                         default=lambda: datetime.now(timezone.utc))
+    participations: Mapped[List["Participation"]
+                           ] = relationship(back_populates="game")
+    game_cards: Mapped[List["GameCard"]
+                       ] = relationship(back_populates="game")
 
 
 class Participation(Base):
     """Participation table"""
     __tablename__ = "participations"
 
-    id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, index=True, default=uuid.uuid4)
     position = Column(Integer, nullable=False, default=0)
     status = Column(Enum(ParticipationStatus), nullable=False,
                     default=ParticipationStatus.PLAYING)
@@ -54,13 +63,16 @@ class Participation(Base):
         "games.id", ondelete="SET NULL"))
     user_id = Column(Uuid, ForeignKey(
         "users.id", ondelete="SET NULL"))
+    game: Mapped["Game"] = relationship(back_populates="participations")
+    user: Mapped["User"] = relationship(back_populates="participations")
 
 
 class PhysicalCard(Base):
     """Physical Card table"""
     __tablename__ = "physical_cards"
 
-    id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, index=True, default=uuid.uuid4)
     suit = Column(Enum(CardSuit), nullable=False)
     rank = Column(Enum(CardRank), nullable=False)
     deck_number = Column(Integer, nullable=False)
@@ -72,7 +84,10 @@ class GameCard(Base):
     """Game Card table"""
     __tablename__ = "game_cards"
 
-    id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, index=True, default=uuid.uuid4)
+    suit = Column(Enum(CardSuit), nullable=False)
+    rank = Column(Enum(CardRank), nullable=False)
     game_id = Column(Uuid, ForeignKey(
         "games.id", ondelete="SET NULL"))
     physical_card_id = Column(Uuid, ForeignKey(
@@ -80,3 +95,5 @@ class GameCard(Base):
     location_type = Column(Enum(CardLocation), nullable=False)
     holder_id = Column(Uuid, nullable=True)
     position = Column(Integer, nullable=False, default=0)
+    game: Mapped["Game"] = relationship(back_populates="game_cards")
+    physical_card: Mapped["PhysicalCard"] = relationship()

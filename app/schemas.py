@@ -1,12 +1,13 @@
 """API schemas"""
 import uuid
 
+from typing import List
 from datetime import datetime
 from pydantic import BaseModel
 from pydantic.types import PositiveInt
 from fastapi_users import schemas
 
-from app.enums import GameVariant, GameStatus, ParticipationStatus
+from app.enums import GameVariant, GameStatus, ParticipationStatus, CardSuit, CardRank, CardLocation
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
@@ -40,16 +41,27 @@ class GameCreate(BaseModel):
     variant: GameVariant
 
 
+class GameCardRead(BaseModel):
+    suit: CardSuit
+    rank: CardRank
+    location_type: CardLocation
+    holder_id: uuid.UUID
+    position: int
+
+
 class ParticipationRead(BaseModel):
     id: uuid.UUID
     position: int
     status: ParticipationStatus
     bet: int
     cash: int
-    # hand: str
     created_at: datetime
     game_id: uuid.UUID
     user_id: uuid.UUID
+
+
+class ParticipationReadWithGameCards(ParticipationRead):
+    game_cards: List[GameCardRead]
 
 
 class ParticipationCreate(BaseModel):

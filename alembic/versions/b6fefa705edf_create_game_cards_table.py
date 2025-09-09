@@ -8,10 +8,10 @@ Create Date: 2025-06-28 05:46:12.045980
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import ENUM as pgEnum
 from alembic import op
 
-from app.enums import CardLocation
-
+from app.enums import CardLocation, CardRank, CardSuit
 
 # revision identifiers, used by Alembic.
 revision: str = 'b6fefa705edf'
@@ -26,6 +26,10 @@ def upgrade() -> None:
         'game_cards',
         sa.Column('id', sa.Uuid(), nullable=False),
         sa.Column('game_id', sa.Uuid(), nullable=False),
+        sa.Column("suit", pgEnum(*[suit.name for suit in CardSuit],
+                                 name='cardsuit', create_type=False), nullable=False),
+        sa.Column("rank", pgEnum(*[rank.name for rank in CardRank],
+                                 name='cardrank', create_type=False), nullable=False),
         sa.Column('physical_card_id', sa.Uuid(), nullable=False),
         sa.Column('location_type', sa.Enum(
             *[location.name for location in CardLocation],

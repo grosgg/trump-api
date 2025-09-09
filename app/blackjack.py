@@ -28,6 +28,8 @@ async def initialize_decks(game: Game, db: AsyncSession) -> None:
     for i, physical_card in enumerate(physical_cards):
         print(i, physical_card.id)
         game_card = GameCard(
+            suit=physical_card.suit,
+            rank=physical_card.rank,
             game_id=game.id,
             physical_card_id=physical_card.id,
             location_type=CardLocation.DECK,
@@ -39,8 +41,11 @@ async def initialize_decks(game: Game, db: AsyncSession) -> None:
     await shuffle_deck(game, db)
 
 
-def evaluate_game_status(game: Game, participations: list[Participation]) -> GameStatus:
+async def evaluate_game_status(game: Game, db: AsyncSession) -> GameStatus:
     """Evaluate game status depending on participations"""
+
+    participations = await db.scalars(
+        select(Participation).where(Participation.game_id == game.id))
 
     # Game cannot be reopened
     if getattr(game, 'status') == GameStatus.FINISHED:
@@ -61,7 +66,7 @@ def evaluate_game_status(game: Game, participations: list[Participation]) -> Gam
            for participation in active_participations):
         return GameStatus.PLAYING
 
-    # Otherwise, the game is pending
+    # Otherwise, the game is ready
     return GameStatus.READY
 
 
@@ -78,6 +83,16 @@ async def shuffle_deck(game: Game, db: AsyncSession) -> None:
     await db.commit()
 
 
+async def start_round(game: Game, db: AsyncSession) -> None:
+    """Start a new round"""
+    participations = await db.scalars(
+        select(Participation).where(Participation.game_id == game.id))
+
+    setattr(game, 'hands_played', game.hands_played + 1)
+    await db.commit()
+    await deal_initial_hands(game, list(participations), db)
+
+
 async def deal_initial_hands(
         game: Game, participations: list[Participation], db: AsyncSession) -> None:
     """Deal intial hands to participants and dealer"""
@@ -88,9 +103,43 @@ async def deal_initial_hands(
                game.id and GameCard.location_type == CardLocation.DECK)
         .order_by(GameCard.position)
     ))
+
+    # Distribute 2 cards to each player
     for participation in participations:
         for _ in range(2):
             game_card = game_cards.pop()
             setattr(game_card, 'holder_id', participation.id)
             setattr(game_card, 'location_type', CardLocation.PLAYER_HAND)
+
+    # Distribute 2 cards to the dealer
+    for _ in range(2):
+        game_card = game_cards.pop()
+        setattr(game_card, 'holder_id', game.id)
+        setattr(game_card, 'location_type', CardLocation.DEALER_HAND)
     await db.commit()
+
+    await check_naturals(game, participations, db)
+
+
+async def check_naturals(game: Game, participations: list[Participation], db: AsyncSession) -> None:
+    """Check for naturals"""
+    dealer_hand = list(await db.execute(
+        select(GameCard.id, PhysicalCard.rank)
+        .join(PhysicalCard, GameCard.physical_card_id == PhysicalCard.id)
+        .where(GameCard.game_id == game.id)
+        .where(GameCard.location_type == CardLocation.DEALER_HAND)
+        .where(GameCard.holder_id == game.id)
+    ))
+
+    for participation in participations:
+        player_hand = list(await db.execute(
+            select(GameCard.id, PhysicalCard.rank)
+            .join(PhysicalCard, GameCard.physical_card_id == PhysicalCard.id)
+            .where(GameCard.game_id == game.id)
+            .where(GameCard.location_type == CardLocation.PLAYER_HAND)
+            .where(GameCard.holder_id == participation.id)
+        ))
+
+
+def hand_value(hand: list[GameCard]) -> int:
+    """Calculate the value of a hand"""
